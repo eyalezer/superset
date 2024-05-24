@@ -23,6 +23,7 @@ from typing import Any, Callable, Optional, Union
 import numpy as np
 import pandas as pd
 import simplejson
+import ujson
 from flask_babel.speaklater import LazyString
 from simplejson import JSONDecodeError  # noqa: F401 # pylint: disable=unused-import
 
@@ -199,29 +200,42 @@ def dumps(  # pylint: disable=too-many-arguments
     """
 
     results_string = ""
+
     try:
-        results_string = simplejson.dumps(
-            obj,
-            default=default,
-            allow_nan=allow_nan,
-            ignore_nan=ignore_nan,
-            sort_keys=sort_keys,
-            indent=indent,
-            separators=separators,
-            cls=cls,
-        )
-    except UnicodeDecodeError:
-        results_string = simplejson.dumps(  # type: ignore[call-overload]
-            obj,
-            default=default,
-            allow_nan=allow_nan,
-            ignore_nan=ignore_nan,
-            sort_keys=sort_keys,
-            indent=indent,
-            separators=separators,
-            cls=cls,
-            encoding=None,
-        )
+        if ignore_nan is not None or indent is not None or cls is not None:  # pylint: disable=no-else-raise
+            raise TypeError  # rasing exception in order to jump to simplejson
+        else:
+            results_string = ujson.dumps(
+                obj,
+                default=default,
+                allow_nan=allow_nan,
+                sort_keys=sort_keys,
+                separators=separators,
+            )
+    except (TypeError, ujson.JSONDecodeError):
+        try:
+            results_string = simplejson.dumps(
+                obj,
+                default=default,
+                allow_nan=allow_nan,
+                ignore_nan=ignore_nan,
+                sort_keys=sort_keys,
+                indent=indent,
+                separators=separators,
+                cls=cls,
+            )
+        except UnicodeDecodeError:
+            results_string = simplejson.dumps(  # type: ignore[call-overload]
+                obj,
+                default=default,
+                allow_nan=allow_nan,
+                ignore_nan=ignore_nan,
+                sort_keys=sort_keys,
+                indent=indent,
+                separators=separators,
+                cls=cls,
+                encoding=None,
+            )
     return results_string
 
 
@@ -241,12 +255,18 @@ def loads(
     :returns: A Python object deserialized from string
     """
     try:
-        return simplejson.loads(
-            obj,
-            encoding=encoding,
-            allow_nan=allow_nan,
-            object_hook=object_hook,
-        )
-    except JSONDecodeError as ex:
-        logger.error("JSON is not valid %s", str(ex), exc_info=True)
-        raise ex
+        if encoding is not None or allow_nan is not None or object_hook is not None:  # pylint: disable=no-else-raise
+            raise TypeError  # rasing exception in order to jump to simplejson
+        else:
+            return ujson.loads(obj)
+    except (TypeError, ujson.JSONDecodeError):
+        try:
+            return simplejson.loads(
+                obj,
+                encoding=encoding,
+                allow_nan=allow_nan,
+                object_hook=object_hook,
+            )
+        except JSONDecodeError as ex:
+            logger.error("JSON is not valid %s", str(ex), exc_info=True)
+            raise ex
